@@ -1,5 +1,7 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import requests
+
 from urllib.request import urlopen
 
 # Set your credentials here
@@ -20,7 +22,7 @@ sp = spotipy.Spotify(auth_manager=sp_oauth)
 user = sp.current_user()
 print(f"Authorized as: {user['display_name']}")
 
-# Now you can interact with Spotify API (example: get the user's playlists)
+# get the user's playlists)
 # playlists = sp.current_user_playlists()
 # for playlist in playlists['items']:
 #     print(f"Playlist name: {playlist['name'],playlist['name']}")
@@ -43,32 +45,52 @@ while True:
     offset += limit
 
 #pull names of all songs and add to a list
-track_names = []
-for track in all_tracks:
-    track_name = track['track']['name']
-    track_names.append(track_name)
+song_names = []
+for item in all_tracks:
+    track = item['track']
+    track_name = track['name']
+    song_names.append(track_name)
 
-#get genre
-def Get_Genre(url):
-    try:
-        page = urlopen(url)
-        html_bytes = page.read()
-        html = html_bytes.decode("utf-8")
+song_artists = []
 
-        title_index = html.find('<span class="bday">')
-        start_index = title_index + len('<span class="bday">')
-        end_index = start_index + 10
-        dob = html[start_index:end_index]
+for item in all_tracks:
+    track = item['track']
+    temp_names = []
+    for artist in track['artists']:
+        temp_names.append(artist['name'])
+    song_artists.append(temp_names)
 
-        if dob == "tml class=":
-            return False
-        else:
-            print(f"dob = {dob}")
+song_duration = []
+for item in all_tracks:
+    track = item['track']
+    temp_duration = track['duration_ms']//1000
+    song_duration.append(temp_duration)
 
-    except:
-        print("who the hell even is that")
+print(song_names)
+print(song_duration)
+print(song_artists)
 
-genres = []
-for name in track_names:
-    for
+song_release_dates = []
+for item in all_tracks:
+    track = item['track']
+    song_release_dates.append(track['album']['release_date'])
 
+print(song_release_dates)
+
+song_albums = []
+for item in all_tracks:
+    track = item['track']
+    song_albums.append(track['album']['name'])
+
+print(song_albums)
+
+song_genres = []
+
+for item in all_tracks:
+    track = item['track']
+    artist_id = track['artists'][0]['id']
+    artist_info = sp.artist(artist_id)
+    artist_genres = artist_info.get('genres', [])
+    song_genres.append(artist_genres)
+
+print(song_genres)
