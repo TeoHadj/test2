@@ -1,43 +1,36 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import quote
 
 def get_wiki_genres(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }
 
-    try:
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, "html.parser")
+    response = requests.get(url, headers=headers)
 
-        infobox = soup.find("table", class_="infobox")
 
-        genres = []
+    soup = BeautifulSoup(response.text, "html.parser")
 
-        # --- ORIGINAL SEARCH ---
-        if infobox:
-            for row in infobox.find_all("tr"):
-                header = row.find("th")
-                if header and header.get_text(strip=True).lower() in ["genre", "genres"]:
-                    td = row.find("td")
-                    if td:
-                        genres = list(td.stripped_strings)
-                    break
+    infobox = soup.find("table", class_=lambda x: x and "infobox" in x)
+    genres = []
 
-        # --- FALLBACK: search nested tables or sections ---
-        if not genres and infobox:
-            for th in infobox.find_all("th"):
-                if th.get_text(strip=True).lower() in ["genre", "genres"]:
-                    td = th.find_next_sibling("td")
-                    if td:
-                        genres = list(td.stripped_strings)
-                    break
-
+    if not infobox:
         return genres
 
-    except:
-        return []
+    for row in infobox.find_all("tr"):
+        th = row.find("th")
+        if th and th.get_text(strip=True).lower() in ("genre", "genres"):
+            td = row.find("td")
+            if td:
+                genres = [g.strip() for g in td.stripped_strings]
+            break
 
 
- #Do James Bay with singer added
+    cleaned = []
+    for value in genres:
+        if not(value.isdigit()) and not(value in ['[', ']']) :
+            cleaned.append(value)
+    return cleaned
+
+
+print(get_wiki_genres("https://en.wikipedia.org/wiki/Crystal_Waters"))

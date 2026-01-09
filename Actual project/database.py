@@ -28,3 +28,4 @@ FOREIGN KEY(SongID) REFERENCES Song (SongID)
 FOREIGN KEY(GenreID) REFERENCES Genre (GenreID))"""
 cursor.execute(sqlite_select_query)
 records = cursor.fetchall()
+pass

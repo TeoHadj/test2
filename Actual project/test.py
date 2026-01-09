@@ -133,14 +133,23 @@ for i in range(50):
 
 
         genres = get_wiki_genres(url)
-
-        if not missing_artist_genres[i]:
-
-            missing_artist_genres[i] = genres
-            # print(f"{i} out of {len(missing_artist_genres)}")
+        if len(genres) > 0:
             print(f"{i} out of 50")
-        else:
+            if not missing_artist_genres[i]:
+                missing_artist_genres[i] = genres
             break
+        if not genres:
+            url += "_(singer)"
+            genres = get_wiki_genres(url)
+            if len(genres) > 0:
+                print(f"{i} out of 50")
+                if not missing_artist_genres[i]:
+                    missing_artist_genres[i] = genres
+
+                break
+        # print(f"{i} out of {len(missing_artist_genres)}")
+    if not missing_artist_genres[i]:
+        missing_artist_genres[i] = missing_artist_names[i]
 print(missing_artist_genres)
 
 # for i in range(len(missing_artist_names)):
