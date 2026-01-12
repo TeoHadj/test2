@@ -33,4 +33,4 @@ def get_wiki_genres(url):
     return cleaned
 
 
-print(get_wiki_genres("https://en.wikipedia.org/wiki/Crystal_Waters"))
+print(get_wiki_genres("https://en.wikipedia.org/wiki/Coldplay"))
