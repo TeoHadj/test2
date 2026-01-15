@@ -3,9 +3,7 @@ from spotipy.oauth2 import SpotifyOAuth
 import time
 from webscrape2 import get_wiki_genres
 
-
-
-
+to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
 
 CLIENT_ID = '04df9df5cd8e400483dc0cfbce4dcd66'
 CLIENT_SECRET = '202662453275474f801833a07e418586'
@@ -127,34 +125,41 @@ print(missing_artist_names)
 missing_artist_genres = [[] for i in range(50)]
 # for i in range(len(missing_artist_names)):
 for i in range(50):
-    for artist in missing_artist_names[i][0]:
+    Found = False
+    while not Found:
+        print(f"{i} out of 50")
+        artist = missing_artist_names[i][0][0]
+
+
         page_title = artist.replace(" ", "_")
-        url = f"https://en.wikipedia.org/wiki/{page_title}"
 
-
-        genres = get_wiki_genres(url)
-        if len(genres) > 0:
-            print(f"{i} out of 50")
-            if not missing_artist_genres[i]:
-                missing_artist_genres[i] = genres
-            break
-        if not genres:
-            url += "_(singer)"
+        for ending in to_try:
+            url = f"https://en.wikipedia.org/wiki/{page_title}"
+            url += ending
             genres = get_wiki_genres(url)
-            if len(genres) > 0:
-                print(f"{i} out of 50")
-                if not missing_artist_genres[i]:
-                    missing_artist_genres[i] = genres
 
+            if len(genres) > 0:
+                missing_artist_genres[i] = genres
+                Found = True
                 break
-        # print(f"{i} out of {len(missing_artist_genres)}")
-    if not missing_artist_genres[i]:
-        missing_artist_genres[i] = missing_artist_names[i]
+
+        if not missing_artist_genres[i]:
+                for ending in to_try:
+                    url = f"https://en.wikipedia.org/wiki/{page_title.title()}"
+                    url += ending
+                    genres = get_wiki_genres(url)
+                    if len(genres) > 0:
+                        missing_artist_genres[i] = genres
+                        Found = True
+                        break
+    # print(f"{i} out of {len(missing_artist_genres)}")
+        if not missing_artist_genres[i]:
+            missing_artist_genres[i] = missing_artist_names[i]
+            Found = True
+            break
+
 print(missing_artist_genres)
 
-# for i in range(len(missing_artist_names)):
-#     for artist in missing_artist_genres[i]:
-
-
-
-
+for i in range(50):
+    insert_index = missing_artist_names[i][1]
+    song_genres[insert_index] = missing_artist_genres[i]
