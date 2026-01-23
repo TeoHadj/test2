@@ -1,18 +1,11 @@
 import sqlalchemy
 import sqlalchemy.orm as orm
 from sqlalchemy import insert
-from test import song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres
 
-# `orm.DeclarativeBase` does all the magic for us
-# `orm.MappedAsDataclass` enables us to use class
-# declarations in the style of `@dataclass`
-db_song_artists = song_artists
-db_song_genres = song_genres
-for i in range(len(db_song_artists)):
-    db_song_artists[i] = db_song_artists[i][0]
-    db_song_genres[i] = db_song_genres[i][0]
-set(db_song_artists)
-set(db_song_genres)
+
+
+
+
 
 class Base(orm.DeclarativeBase, orm.MappedAsDataclass):
     pass
@@ -96,7 +89,7 @@ class Genre(Base):
 
         default_factory=list,
         secondary='song_genre',
-        back_populates="songs",
+        back_populates="genres",
         # This has to be the same attribute as declared
         # in the `Pupil` class
 
@@ -145,28 +138,88 @@ class Song_Artist(Base):
         sqlalchemy.ForeignKey('artist.artist_id'),
         primary_key=True
     )
+    album: orm.Mapped[str] = orm.mapped_column()
 
 engine = sqlalchemy.create_engine("sqlite+pysqlite:///pupils.sqlite", echo=False)
 
-with (orm.Session(engine) as session):
+Base.metadata.create_all(engine)
+
+def reset_database():
+    """
+    DEV ONLY.
+    Drops all tables and recreates them from ORM models.
+    """
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+
+
+def populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres):
+    db_song_artists = []
+    db_song_genres = []
+    song_artist_match = [[] for _ in range(len(song_names))]
+    song_genre_match = [[] for _ in range(len(song_names))]
+
+
+    for artists in song_artists:
+        for artist in artists:
+            if artist not in db_song_artists:
+                db_song_artists.append(artist)
+
+    for genres in song_genres:
+        for genre in genres:
+            if genre not in db_song_genres:
+                db_song_genres.append(genre)
+
     for i in range(len(song_names)):
+        for artist in song_artists[i]:
+            song_artist_match[i].append(db_song_artists.index(artist) + 1)
 
-        session.execute(
-            insert(Song),
-            [
-                {"song_id": i+1, "name": song_names[i][0], "duration": song_duration[i], "release_year": song_release_dates[i]}]
-        )
+    for i in range(len(song_names)):
+        for genre in song_genres[i]:
+            song_genre_match[i].append(db_song_genres.index(genre) + 1)
 
-    for i in range(len(song_artists)):
-        session.execute(
-            insert(Artist),
-            [
-                {"artist_id": i+1, "name": song_artists[i]}]
-        )
-    for i in range(len(song_genres)):
-        session.execute(
-            insert(Genre),
-            [
-                {"genre_id": i+1, "name": song_genres[i]}
-            ]
-        )
+    # --- INSERT INTO DB ---
+    with orm.Session(engine) as session:
+
+        for i in range(len(song_names)):
+            session.execute(
+                insert(Song),
+                {
+                    "song_id": i + 1,
+                    "name": song_names[i],
+                    "duration": song_duration[i],
+                    "release_year": song_release_dates[i],
+                },
+            )
+
+        for i, artist in enumerate(db_song_artists):
+            session.execute(
+                insert(Artist),
+                {"artist_id": i + 1, "name": artist},
+            )
+
+        for i, genre in enumerate(db_song_genres):
+            session.execute(
+                insert(Genre),
+                {"genre_id": i + 1, "name": genre},
+            )
+
+        for i in range(len(song_names)):
+            for artist_id in song_artist_match[i]:
+                session.execute(
+                    insert(Song_Artist),
+                    {
+                        "song_id": i + 1,
+                        "artist_id": artist_id,
+                        "album": song_albums[i],
+                    },
+                )
+
+        for i in range(len(song_names)):
+            for genre_id in song_genre_match[i]:
+                session.execute(
+                    insert(Song_Genre),
+                    {"song_id": i + 1, "genre_id": genre_id},
+                )
+
+        session.commit()

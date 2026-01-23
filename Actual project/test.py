@@ -2,6 +2,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import time
 from webscrape2 import get_wiki_genres
+from database import populate_database, reset_database
+from queries import print_full_song_view
 
 to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
 
@@ -122,12 +124,12 @@ for index in range(len(song_genres)):
 
 print(missing_artist_names)
 #missing_artist_genres = [[] for i in range(len(missing_artist_names))]
-missing_artist_genres = [[] for i in range(50)]
+missing_artist_genres = [[] for i in range(10)]
 # for i in range(len(missing_artist_names)):
-for i in range(50):
+for i in range(10):
     Found = False
     while not Found:
-        print(f"{i} out of 50")
+        print(f"{i+1} out of 10")
         artist = missing_artist_names[i][0][0]
 
 
@@ -154,12 +156,15 @@ for i in range(50):
                         break
     # print(f"{i} out of {len(missing_artist_genres)}")
         if not missing_artist_genres[i]:
-            missing_artist_genres[i] = missing_artist_names[i]
+            missing_artist_genres[i] = []
             Found = True
             break
 
 print(missing_artist_genres)
 
-for i in range(50):
+for i in range(10):
     insert_index = missing_artist_names[i][1]
     song_genres[insert_index] = missing_artist_genres[i]
+reset_database()
+populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres)
+print_full_song_view()
