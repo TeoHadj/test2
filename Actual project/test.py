@@ -4,6 +4,9 @@ import time
 from webscrape2 import get_wiki_genres
 from database import populate_database, reset_database
 from queries import print_full_song_view
+from queries import get_all_spotify_ids
+from snippet import preview
+
 
 to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
 
@@ -45,6 +48,16 @@ while True:
     offset += limit
 
 #pull names of all songs and add to a list
+song_ids = []
+for item in all_tracks:
+    track = item['track']
+    track_id = track['id']
+    song_ids.append(track_id)
+
+print(song_ids)
+
+
+
 song_names = []
 for item in all_tracks:
     track = item['track']
@@ -118,53 +131,62 @@ for item in all_tracks:
     song_genres.append(list(set(track_genres)))
 print(song_genres)
 
-for index in range(len(song_genres)):
-    if not song_genres[index]:
-        missing_artist_names.append([song_artists[index], index])
-
-print(missing_artist_names)
-#missing_artist_genres = [[] for i in range(len(missing_artist_names))]
-missing_artist_genres = [[] for i in range(10)]
-# for i in range(len(missing_artist_names)):
-for i in range(10):
-    Found = False
-    while not Found:
-        print(f"{i+1} out of 10")
-        artist = missing_artist_names[i][0][0]
-
-
-        page_title = artist.replace(" ", "_")
-
-        for ending in to_try:
-            url = f"https://en.wikipedia.org/wiki/{page_title}"
-            url += ending
-            genres = get_wiki_genres(url)
-
-            if len(genres) > 0:
-                missing_artist_genres[i] = genres
-                Found = True
-                break
-
-        if not missing_artist_genres[i]:
-                for ending in to_try:
-                    url = f"https://en.wikipedia.org/wiki/{page_title.title()}"
-                    url += ending
-                    genres = get_wiki_genres(url)
-                    if len(genres) > 0:
-                        missing_artist_genres[i] = genres
-                        Found = True
-                        break
-    # print(f"{i} out of {len(missing_artist_genres)}")
-        if not missing_artist_genres[i]:
-            missing_artist_genres[i] = []
-            Found = True
-            break
-
-print(missing_artist_genres)
-
-for i in range(10):
-    insert_index = missing_artist_names[i][1]
-    song_genres[insert_index] = missing_artist_genres[i]
+# for index in range(len(song_genres)):
+#     if not song_genres[index]:
+#         missing_artist_names.append([song_artists[index], index])
+#
+# print(missing_artist_names)
+# #missing_artist_genres = [[] for i in range(len(missing_artist_names))]
+# missing_artist_genres = [[] for i in range(10)]
+# # for i in range(len(missing_artist_names)):
+# for i in range(10):
+#     Found = False
+#     while not Found:
+#         print(f"{i+1} out of 10")
+#         artist = missing_artist_names[i][0][0]
+#
+#
+#         page_title = artist.replace(" ", "_")
+#
+#         for ending in to_try:
+#             url = f"https://en.wikipedia.org/wiki/{page_title}"
+#             url += ending
+#             genres = get_wiki_genres(url)
+#
+#             if len(genres) > 0:
+#                 missing_artist_genres[i] = genres
+#                 Found = True
+#                 break
+#
+#         if not missing_artist_genres[i]:
+#                 for ending in to_try:
+#                     url = f"https://en.wikipedia.org/wiki/{page_title.title()}"
+#                     url += ending
+#                     genres = get_wiki_genres(url)
+#                     if len(genres) > 0:
+#                         missing_artist_genres[i] = genres
+#                         Found = True
+#                         break
+#     # print(f"{i} out of {len(missing_artist_genres)}")
+#         if not missing_artist_genres[i]:
+#             missing_artist_genres[i] = []
+#             Found = True
+#             break
+#
+# print(missing_artist_genres)
+#
+# for i in range(10):
+#     insert_index = missing_artist_names[i][1]
+#     song_genres[insert_index] = missing_artist_genres[i]
 reset_database()
-populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres)
-print_full_song_view()
+populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres, song_ids)
+#print_full_song_view()
+ids = get_all_spotify_ids()
+count = 0
+for id in ids:
+    track = sp.track(id)
+    preview_url = track["preview_url"]
+    preview(preview_url)
+    count += 1
+    if count == 10:
+        break

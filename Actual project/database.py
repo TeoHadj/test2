@@ -46,6 +46,7 @@ class Song(Base):
     name: orm.Mapped[str] = orm.mapped_column()
     duration: orm.Mapped[int] = orm.mapped_column()
     release_year: orm.Mapped[str] = orm.mapped_column()
+    spotify_id: orm.Mapped[str] = orm.mapped_column()
 
     genres: orm.Mapped[list['Genre']] = orm.relationship(
         # This is the other half of the many-to-many
@@ -153,7 +154,7 @@ def reset_database():
     Base.metadata.create_all(engine)
 
 
-def populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres):
+def populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres, song_ids):
     db_song_artists = []
     db_song_genres = []
     song_artist_match = [[] for _ in range(len(song_names))]
@@ -189,6 +190,7 @@ def populate_database(song_names, song_artists, song_duration, song_release_date
                     "name": song_names[i],
                     "duration": song_duration[i],
                     "release_year": song_release_dates[i],
+                    "spotify_id": song_ids[i]
                 },
             )
 

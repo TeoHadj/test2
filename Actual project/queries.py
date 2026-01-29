@@ -34,6 +34,10 @@ def get_all_song_genres():
     with Session(engine) as session:
         return session.scalars(select(Song_Genre)).all()
 
+def get_all_spotify_ids():
+    with Session(engine) as session:
+        return session.scalars(select(Song.spotify_id)).all()
+
 
 
 def print_full_song_view():
