@@ -4,8 +4,9 @@ import time
 from webscrape2 import get_wiki_genres
 from database import populate_database, reset_database
 from queries import print_full_song_view
-from queries import get_all_spotify_ids
-from snippet import preview
+import tkinter as tk
+from tkinter import font
+
 
 
 to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
@@ -180,13 +181,182 @@ print(song_genres)
 #     song_genres[insert_index] = missing_artist_genres[i]
 reset_database()
 populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres, song_ids)
-#print_full_song_view()
-ids = get_all_spotify_ids()
-count = 0
-for id in ids:
-    track = sp.track(id)
-    preview_url = track["preview_url"]
-    preview(preview_url)
-    count += 1
-    if count == 10:
-        break
+
+
+songsUse = []
+for i in range(len(song_names)):
+    songsUse.append({
+        "name": song_names[i],
+        "artists": song_artists[i],
+        "album": song_albums[i]
+    })
+
+class Menu(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(fill=tk.BOTH, expand=True)
+
+        self.configure(bg="light blue")
+
+        # Fonts
+        self.title_font = font.Font(family="Helvetica", size=36, weight="bold")
+        self.box_font = font.Font(family="Helvetica", size=30, weight="bold")
+
+        # Title
+        self.title_label = tk.Label(
+            self,
+            text="VibeList",
+            font=self.title_font,
+            bg="light blue",
+            fg="white"
+        )
+        self.title_label.pack(pady=30)
+
+        # Container for boxes
+        self.box_container = tk.Frame(self, bg="light blue")
+        self.box_container.pack(fill=tk.BOTH, expand=True, padx=40, pady=40)
+
+        self.box_container.columnconfigure((0, 1, 2), weight=1)
+        self.box_container.rowconfigure(0, weight=1)
+
+        # Big menu boxes
+        self.view_button = tk.Button(
+            self.box_container,
+            text="View Music",
+            font=self.box_font,
+            command=self.music_view,
+            bg="#F7F7F2",
+            fg="black",
+            relief="flat"
+        )
+
+        self.sort_button = tk.Button(
+            self.box_container,
+            text="Sort Music",
+            font=self.box_font,
+            command=self.window_one,
+            bg="#F7F7F2",
+            fg="black",
+            relief="flat"
+        )
+
+        self.recommend_button = tk.Button(
+            self.box_container,
+            text="Recommend Music",
+            font=self.box_font,
+            command=self.recommend_view,
+            bg="#F7F7F2",
+            fg="black",
+            relief="flat"
+        )
+
+        # Layout
+        self.view_button.grid(row=0, column=0, sticky="nsew", padx=15)
+        self.sort_button.grid(row=0, column=1, sticky="nsew", padx=15)
+        self.recommend_button.grid(row=0, column=2, sticky="nsew", padx=15)
+
+    def window_one(self):
+        self.destroy()
+        Music_Sort(self.master)
+
+    def music_view(self):
+        self.destroy()
+        Music_View(self.master)
+
+    def recommend_view(self):
+        self.destroy()
+        Recommend_View(self.master)
+
+
+class Music_Sort(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(fill=tk.BOTH, expand=True)
+
+        self.title_label = tk.Label(self, text="Sort Music", font=("Helvetica", 24))
+        self.menu_button = tk.Button(self, text="Menu", command=self.menu)
+
+        self.title_label.pack(pady=20)
+        self.menu_button.pack()
+
+    def menu(self):
+        self.destroy()
+        Menu(self.master)
+
+
+class Music_View(tk.Frame):
+    def __init__(self, parent, songs = songsUse):
+        super().__init__(parent)
+        self.pack(fill=tk.BOTH, expand=True)
+
+        self.songs = songs
+
+        self.title_label = tk.Label(self, text="View Music", font=("Helvetica", 24))
+        self.menu_button = tk.Button(self, text="Menu", command=self.menu)
+
+        self.title_label.pack(pady=20)
+        self.menu_button.pack()
+
+        song_container = tk.Frame(self)
+        song_container.pack(fill=tk.BOTH, expand=True, padx = 10, pady = 10)
+        canvas = tk.Canvas(song_container)
+        scrollbar = tk.Scrollbar(song_container, orient="vertical", command = canvas.yview)
+        self.scrollableframe = tk.Frame(canvas)
+
+        self.scrollableframe.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=self.scrollableframe, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill=tk.BOTH, expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Mouse wheel support
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1 * (e.delta // 120), "units"))
+
+
+        for song in self.songs:
+            label = tk.Label(
+                self.scrollableframe,
+                text=f"{song['name']} – {', '.join(song['artists'])} ({song['album']})",
+                anchor="w"
+            )
+            label.pack(fill="x", padx=20, pady=2)
+
+    def menu(self):
+        self.destroy()
+        Menu(self.master)
+
+
+
+
+
+class Recommend_View(tk.Frame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.pack(fill=tk.BOTH, expand=True)
+
+        self.title_label = tk.Label(self, text="Recommend Music", font=("Helvetica", 24))
+        self.menu_button = tk.Button(self, text="Menu", command=self.menu)
+
+        self.title_label.pack(pady=20)
+        self.menu_button.pack()
+
+    def menu(self):
+        self.destroy()
+        Menu(self.master)
+
+
+
+root = tk.Tk()
+root.title("VibeList")
+root.geometry("1000x600")
+root.minsize(800, 500)
+
+Menu(root)
+
+
+root.mainloop()
