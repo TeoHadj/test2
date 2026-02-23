@@ -1,12 +1,16 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import time
+from Add_playlist import add_playlist
 from webscrape2 import get_wiki_genres
 from database import populate_database, reset_database
-from queries import print_full_song_view
+from queries import get_all_artists, get_all_genres, get_song_with_artist, get_song_with_genre, get_song_with_year, genre_count, artist_count, genre_count_with_artist_name
 import tkinter as tk
 from tkinter import font
-
+from Add_playlist import add_playlist
+from sqlalchemy.orm import Session
+from database import engine
+from recommendations import cosine_similarity
 
 
 to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
@@ -27,7 +31,7 @@ sp = spotipy.Spotify(auth_manager=sp_oauth)
 
 # Get the current user’s information
 user = sp.current_user()
-print(f"Authorized as: {user['display_name']}")
+print(f"Authorised as: {user['display_name']}")
 
 
 
@@ -55,7 +59,7 @@ for item in all_tracks:
     track_id = track['id']
     song_ids.append(track_id)
 
-print(song_ids)
+# print(song_ids)
 
 
 
@@ -80,23 +84,23 @@ for item in all_tracks:
     temp_duration = track['duration_ms']//1000
     song_duration.append(temp_duration)
 
-print(song_names)
-print(song_duration)
-print(song_artists)
+# print(song_names)
+# print(song_duration)
+# print(song_artists)
 
 song_release_dates = []
 for item in all_tracks:
     track = item['track']
     song_release_dates.append(track['album']['release_date'])
 
-print(song_release_dates)
+# print(song_release_dates)
 
 song_albums = []
 for item in all_tracks:
     track = item['track']
     song_albums.append(track['album']['name'])
 
-print(song_albums)
+# print(song_albums)
 
 
 artist_ids = []
@@ -130,7 +134,7 @@ for item in all_tracks:
     for artist in track['artists']:
         track_genres.extend(artist_genre_map.get(artist['id'], []))
     song_genres.append(list(set(track_genres)))
-print(song_genres)
+# print(song_genres)
 
 # for index in range(len(song_genres)):
 #     if not song_genres[index]:
@@ -181,8 +185,46 @@ print(song_genres)
 #     song_genres[insert_index] = missing_artist_genres[i]
 reset_database()
 populate_database(song_names, song_artists, song_duration, song_release_dates, song_albums, song_genres, song_ids)
+genreOptions = sorted(get_all_genres())
+artistOptions = sorted(get_all_artists())
+
+yearOptions = []
+for date in song_release_dates:
+    if date[:4] not in yearOptions:
+        yearOptions.append(date[:4])
+yearOptions = sorted(yearOptions)
+optionsGlobal = ["By Genre", "By Year Released", "By Artist"]
 
 
+genre_percentages = {}
+no_songs = len(song_names)
+with Session(engine) as session:
+    for genre in genreOptions:
+        no_genre = genre_count(session, genre)
+        genre_percentages[genre] = no_genre/no_songs
+
+
+artist_percentages = {}
+with Session(engine) as session:
+    for artist in artistOptions:
+        no_artist = artist_count(session, artist)
+        artist_percentages[artist] = no_artist/no_songs
+top_10_genres = sorted(genre_percentages, key = genre_percentages.get, reverse = True)[:10]
+top_10_artists = sorted(artist_percentages, key = artist_percentages.get, reverse = True)[:10]
+
+artist_cosine_match = {}
+with Session(engine) as session:
+    for artist in top_10_artists:
+        artist_genre_percentages = {}
+        for genre in genreOptions:
+            temp_no_artist = artist_count(session, artist)
+            no_specific_genre_for_artist = genre_count_with_artist_name(session, genre, artist)
+            artist_genre_percentages[genre] = no_specific_genre_for_artist/temp_no_artist
+
+        artist_cosine_match[artist] = cosine_similarity(list(artist_genre_percentages.values()), list(genre_percentages.values()))
+print(artist_cosine_match)
+top3_artists = sorted(artist_cosine_match, key = artist_cosine_match.get, reverse = True)[:3]
+print(top3_artists)
 songsUse = []
 for i in range(len(song_names)):
     songsUse.append({
@@ -269,25 +311,238 @@ class Menu(tk.Frame):
 
 
 class Music_Sort(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, options = optionsGlobal):
         super().__init__(parent)
         self.pack(fill=tk.BOTH, expand=True)
-
+        self.configure(bg="light blue")
+        self.playlist_button_state = False
+        self.lookup = {}
+        self.options = options
+        self.playlist = []
+        self.value_inside_menu = tk.StringVar()
+        self.value_in_year_menu = tk.StringVar()
+        self.value_in_year_menu.set("Select Year")
+        self.value_inside_menu.set("Select How You Want Music to be Sorted")
         self.title_label = tk.Label(self, text="Sort Music", font=("Helvetica", 24))
         self.menu_button = tk.Button(self, text="Menu", command=self.menu)
-
+        self.options = tk.OptionMenu(self, self.value_inside_menu, *self.options)
+        self.genre_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height=15)
+        for genre in genreOptions:
+            self.genre_menu.insert(tk.END, genre)
+        self.year_menu = tk.OptionMenu(self, self.value_in_year_menu, *yearOptions)
+        self.artist_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height=15)
+        for artist in artistOptions:
+            self.artist_menu.insert(tk.END, artist)
         self.title_label.pack(pady=20)
         self.menu_button.pack()
+        self.options.pack()
+        self.value_inside_menu.trace_add("write", self.check)
+        self.value_in_year_menu.trace_add("write", self.display_year_match)
+        self.genre_confirm_button = tk.Button(self, text = "Confirm Genres", command = self.confirm_genres)
+        self.artist_confirm_button = tk.Button(self, text="Confirm Artists", command=self.confirm_artists)
+        self.genre_match_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height=15)
+        self.artist_match_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height=15)
+        self.year_match_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height=15)
+        self.add_to_playlist_button = tk.Button(self, text="Add songs to new playlist", command = self.add_to_playlist)
+        self.view_playlist_button = tk.Button(self, text = "View New Playlist", command = self.view_playlist)
+        self.view_playlist_button.pack()
+        self.view_playlist_menu = tk.Listbox(self, selectmode=tk.MULTIPLE, height = 15)
+        self.remove_from_playlist_button = tk.Button(self, text = "Remove song from playlist", command = self.remove_from_playlist)
+        self.clear_playlist_button = tk.Button(self, text = "Clear playlist", command = self.clear_playlist)
+        self.create_playlist_button = tk.Button(self, text = "Add Playlist to Spotify Account", command = self.create_playlist)
+        self.value_inside_name_entry = tk.StringVar()
+        self.playlist_name_entry = tk.Entry(self, textvariable = self.value_inside_name_entry)
+        self.name_entry_label = tk.Label(self, text = "Enter name of playlist: ")
+        self.pls_enter_name_label = tk.Label(self, text = "Please enter a name for the playlist")
+
+
+    def check(self, *args):
+        if self.value_inside_menu.get() == "By Genre":
+            self.pls_enter_name_label.forget()
+            self.clear_playlist_button.forget()
+            self.name_entry_label.forget()
+            self.playlist_name_entry.forget()
+            self.remove_from_playlist_button.forget()
+            self.create_playlist_button.forget()
+            self.view_playlist_menu.forget()
+            self.add_to_playlist_button.forget()
+            self.artist_confirm_button.forget()
+            self.year_menu.forget()
+            self.artist_menu.forget()
+            self.artist_match_menu.forget()
+            self.year_match_menu.forget()
+            self.genre_match_menu.forget()
+            self.genre_menu.pack(side="left", fill="both", expand=True)
+            self.genre_confirm_button.pack()
+
+        elif self.value_inside_menu.get() == "By Year Released":
+            self.pls_enter_name_label.forget()
+            self.clear_playlist_button.forget()
+            self.name_entry_label.forget()
+            self.playlist_name_entry.forget()
+            self.remove_from_playlist_button.forget()
+            self.create_playlist_button.forget()
+            self.view_playlist_menu.forget()
+            self.add_to_playlist_button.forget()
+            self.artist_match_menu.forget()
+            self.year_match_menu.forget()
+            self.genre_match_menu.forget()
+            self.artist_confirm_button.forget()
+            self.genre_confirm_button.forget()
+            self.genre_menu.forget()
+            self.artist_menu.forget()
+            self.year_menu.pack()
+
+        else:
+            self.pls_enter_name_label.forget()
+            self.clear_playlist_button.forget()
+            self.name_entry_label.forget()
+            self.playlist_name_entry.forget()
+            self.remove_from_playlist_button.forget()
+            self.create_playlist_button.forget()
+            self.view_playlist_menu.forget()
+            self.add_to_playlist_button.forget()
+            self.artist_match_menu.forget()
+            self.year_match_menu.forget()
+            self.genre_match_menu.forget()
+            self.genre_confirm_button.forget()
+            self.genre_menu.forget()
+            self.year_menu.forget()
+            self.artist_menu.pack(side="left", fill="both", expand=True)
+            self.artist_confirm_button.pack()
+
+    def confirm_genres(self):
+        selected_genres = [self.genre_menu.get(i) for i in self.genre_menu.curselection()]
+        self.genre_menu.forget()
+        print(selected_genres)
+        self.display_genre_match(selected_genres)
+
+
+
+    def confirm_artists(self):
+        selected_artists = [self.artist_menu.get(i) for i in self.artist_menu.curselection()]
+        self.artist_menu.forget()
+        print(selected_artists)
+        self.display_artist_match(selected_artists)
+
+    def display_genre_match(self, selected_genres):
+        self.genre_confirm_button.forget()
+        genre_match = get_song_with_genre(selected_genres)
+        self.genre_match_menu.delete(0, tk.END)
+        for index, [title, uri] in enumerate(genre_match):
+            self.genre_match_menu.insert(tk.END, title)
+            self.lookup[title] = uri
+        self.genre_match_menu.pack(fill = tk.BOTH, expand=True)
+        self.add_to_playlist_button.pack()
+
+
+    def display_artist_match(self, selected_artists):
+        self.artist_confirm_button.forget()
+        artist_match = get_song_with_artist(selected_artists)
+        self.artist_match_menu.delete(0, tk.END)
+        for index, [title, uri] in enumerate(artist_match):
+            self.artist_match_menu.insert(tk.END, title)
+            self.lookup[title] = uri
+        self.artist_match_menu.pack(fill=tk.BOTH, expand=True)
+        self.add_to_playlist_button.pack()
+
+
+    def display_year_match(self, *args):
+        year_value = self.value_in_year_menu.get()
+        year_match = get_song_with_year(year_value)
+        self.year_match_menu.delete(0, tk.END)
+        for index, [title, uri] in enumerate(year_match):
+            self.year_match_menu.insert(tk.END, title)
+            self.lookup[title] = uri
+        self.year_match_menu.pack(fill=tk.BOTH, expand=True)
+        self.add_to_playlist_button.pack()
+
+
+
+    def add_to_playlist(self):
+
+        if self.value_inside_menu.get() == "By Genre":
+            source = self.genre_match_menu
+        elif self.value_inside_menu.get() == "By Artist":
+            source = self.artist_match_menu
+        else:
+            source = self.year_match_menu
+
+        selected = [source.get(i) for i in source.curselection()]
+        for song in selected:
+            if song not in self.playlist:
+                self.playlist.append(song)
+        print("Playlist: ", self.playlist)
+        return self.playlist
+
+    def view_playlist(self):
+        self.pls_enter_name_label.forget()
+        self.playlist_name_entry.forget()
+        self.name_entry_label.forget()
+        self.add_to_playlist_button.forget()
+        self.artist_match_menu.forget()
+        self.year_match_menu.forget()
+        self.genre_match_menu.forget()
+        self.artist_confirm_button.forget()
+        self.genre_confirm_button.forget()
+        self.genre_menu.forget()
+        self.artist_menu.forget()
+        self.year_menu.forget()
+        self.view_playlist_menu.delete(0, tk.END)
+        self.value_inside_name_entry.set("")
+        for song in self.playlist:
+            self.view_playlist_menu.insert(tk.END, song)
+        self.view_playlist_menu.pack(expand=True, fill=tk.BOTH)
+        self.name_entry_label.pack(side = tk.LEFT, padx = (0,8))
+        self.playlist_name_entry.pack(side = tk.LEFT)
+        self.create_playlist_button.pack(side = tk.RIGHT, padx = (0,8))
+        self.remove_from_playlist_button.pack()
+        self.clear_playlist_button.pack()
+
+
+    def create_playlist(self):
+        if not(self.value_inside_name_entry.get() == ""):
+            self.pls_enter_name_label.forget()
+            self.playlist_name_entry.forget()
+            self.name_entry_label.forget()
+            self.name_entry_label.pack(side=tk.LEFT, padx=(0, 8))
+            self.playlist_name_entry.pack(side=tk.LEFT)
+            insertion_list = []
+            for song in self.playlist:
+                insertion_list.append(self.lookup[song])
+            add_playlist(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, self.value_inside_name_entry.get(), insertion_list)
+        else:
+            self.name_entry_label.forget()
+            self.playlist_name_entry.forget()
+            self.pls_enter_name_label.pack(side=tk.LEFT, padx=(0, 8))
+            self.playlist_name_entry.pack(side=tk.LEFT)
+
+
+    def remove_from_playlist(self):
+        source = self.view_playlist_menu
+        selected = [source.get(i) for i in source.curselection()]
+        for song in selected:
+            self.playlist.remove(song)
+        print(self.playlist)
+
+    def clear_playlist(self):
+        self.playlist.clear()
+
+
 
     def menu(self):
         self.destroy()
         Menu(self.master)
 
 
+
+
+
 class Music_View(tk.Frame):
     def __init__(self, parent, songs = songsUse):
         super().__init__(parent)
         self.pack(fill=tk.BOTH, expand=True)
+        self.configure(bg="light blue")
 
         self.songs = songs
 
@@ -332,18 +587,36 @@ class Music_View(tk.Frame):
 
 
 
-
-
 class Recommend_View(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
         self.pack(fill=tk.BOTH, expand=True)
-
+        self.configure(bg="light blue")
         self.title_label = tk.Label(self, text="Recommend Music", font=("Helvetica", 24))
         self.menu_button = tk.Button(self, text="Menu", command=self.menu)
-
+        self.left_frame = tk.Frame(self, bg ="light blue")
+        self.left_frame.pack(side=tk.LEFT, anchor = "n", padx = 0, pady = 70)
+        self.bottom_frame = tk.Frame(self, bg ="light blue")
+        self.bottom_frame.pack(side=tk.BOTTOM, anchor="w", padx = 10, pady = 100)
+        self.right_frame = tk.Frame(self, bg ="light blue")
+        self.right_frame.pack(side=tk.RIGHT, anchor = "n", padx = 20, pady = 70)
         self.title_label.pack(pady=20)
         self.menu_button.pack()
+        self.genre_title = tk.Label(self.left_frame, text="Top 10 Genres In Your Account: ", font=("Helvetica", 15, "bold"))
+        self.genre_title.pack()
+        self.artist_title = tk.Label(self.right_frame, text="Top 10 Artists In Your Account: ", font=("Helvetica", 15, "bold"))
+        self.artist_title.pack()
+        self.artist_match_title = tk.Label(self.bottom_frame, text = "Top 3 artists that match your music taste: ", font=("Helvetica", 15, "bold"))
+        self.artist_match_title.pack()
+        for genre in top_10_genres:
+            self.top10_genre_label = tk.Label(self.left_frame, font = ("Helvetica", 15), text=f"{genre}: {round(genre_percentages[genre]*100,2)}%")
+            self.top10_genre_label.pack()
+        for artist in top_10_artists:
+            self.top10_artist_label = tk.Label(self.right_frame, font = ("Helvetica", 15), text=f"{artist}: {round(artist_percentages[artist]*100,2)}%")
+            self.top10_artist_label.pack()
+        for artist in top3_artists:
+            self.top3_artist_label = tk.Label(self.bottom_frame, font = ("Helvetica", 15), text=f"{artist} matches your music taste by: {artist_cosine_match[artist]*100}%")
+            self.top3_artist_label.pack()
 
     def menu(self):
         self.destroy()
