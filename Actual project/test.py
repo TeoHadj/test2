@@ -11,7 +11,7 @@ from Add_playlist import add_playlist
 from sqlalchemy.orm import Session
 from database import engine
 from recommendations import cosine_similarity
-
+import math
 
 to_try = ["", "_(singer)", "_(musician)", "_(DJ)", "_(band)", "_(British_band)"]
 
@@ -223,8 +223,8 @@ with Session(engine) as session:
 
         artist_cosine_match[artist] = cosine_similarity(list(artist_genre_percentages.values()), list(genre_percentages.values()))
 print(artist_cosine_match)
-top3_artists = sorted(artist_cosine_match, key = artist_cosine_match.get, reverse = True)[:3]
-print(top3_artists)
+top5_artists = sorted(artist_cosine_match, key = artist_cosine_match.get, reverse = True)[:5]
+print(top5_artists)
 songsUse = []
 for i in range(len(song_names)):
     songsUse.append({
@@ -232,6 +232,22 @@ for i in range(len(song_names)):
         "artists": song_artists[i],
         "album": song_albums[i]
     })
+
+
+top5_songs = {}
+def get_artist_id(name):
+    result = sp.search(f"artist:{name}", type="artist", limit=1)
+    return result["artists"]["items"][0]["id"]
+
+for artist in top5_artists:
+    artist_id = get_artist_id(artist)
+    top_tracks = sp.artist_top_tracks(artist_id, "US")
+    top5_songs[artist] = top_tracks["tracks"]
+
+for artist in top5_artists:
+    for track in top5_songs[artist]:
+        if track['name'] not in song_names:
+            print(track['name'], track['artists'][0]['name'], track['popularity'])
 
 class Menu(tk.Frame):
     def __init__(self, parent):
@@ -614,9 +630,9 @@ class Recommend_View(tk.Frame):
         for artist in top_10_artists:
             self.top10_artist_label = tk.Label(self.right_frame, font = ("Helvetica", 15), text=f"{artist}: {round(artist_percentages[artist]*100,2)}%")
             self.top10_artist_label.pack()
-        for artist in top3_artists:
-            self.top3_artist_label = tk.Label(self.bottom_frame, font = ("Helvetica", 15), text=f"{artist} matches your music taste by: {artist_cosine_match[artist]*100}%")
-            self.top3_artist_label.pack()
+        for artist in top5_artists:
+            self.top5_artist_label = tk.Label(self.bottom_frame, font = ("Helvetica", 15), text=f"{artist} matches your music taste by: {round((math.asin(artist_cosine_match[artist])/(math.pi/2))*100,2)}%")
+            self.top5_artist_label.pack()
 
     def menu(self):
         self.destroy()
